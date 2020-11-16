@@ -1,0 +1,1 @@
+./cistern --root "$PWD/assets/"
