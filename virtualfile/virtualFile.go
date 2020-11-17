@@ -7,13 +7,17 @@ import (
 	"os"
 )
 
-
 type VirtualFile struct {
 	*bytes.Reader
 	vfi virtualFileInfo
 }
 
-func (vf VirtualFile) Close() error { return nil } // No-op, nothing to do here
+func (vf VirtualFile) Close() error {
+	// No-op, nothing to do here
+	// TODO: Actually, do we need to close our Reader and make sure to clear the buffer?
+	return nil
+}
+
 func (vf VirtualFile) Readdir(count int) ([]os.FileInfo, error) {
 	// We are only a single file, not a directory
 	return nil, nil

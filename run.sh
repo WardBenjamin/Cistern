@@ -1,1 +1,1 @@
-./cistern --root "$PWD/assets/"
+./cistern -imageRoot "$PWD/assets/" -poolSize 5
