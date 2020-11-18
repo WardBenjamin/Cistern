@@ -5,6 +5,7 @@ import (
 	"github.com/WardBenjamin/Cistern/virtualfile"
 	"github.com/discordapp/lilliput"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -91,6 +92,9 @@ func (tp ThumbnailProcessor) process(inputBuf []byte, name string) (http.File, e
 		fmt.Printf("error transforming image, %s\n", err)
 		return nil, err
 	}
+
+	// TODO: Hmm
+	debug.FreeOSMemory()
 
 	fmt.Printf("image successfully transformed\n")
 	return virtualfile.OpenVirtualFile(outputBuf, name), nil

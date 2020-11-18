@@ -13,9 +13,9 @@ import (
 	"github.com/discordapp/lilliput"
 	"log"
 	"net/http"
-	"os"
-
 	_ "net/http/pprof"
+	"os"
+	"strings"
 )
 
 type ImageSource interface {
@@ -26,7 +26,6 @@ type thumbnailFileSystem struct {
 	tp ThumbnailProcessor
 	is ImageSource
 }
-
 
 func (fs thumbnailFileSystem) Open(name string) (http.File, error) {
 
@@ -57,29 +56,52 @@ func main() {
 		".webp": map[int]int{lilliput.WebpQuality: 85},
 	}
 
-	var imageRoot string
+	var imageSourceFlag string
+	var rootPath string
 	var poolSize int
 	var maxImageSize int64
+	var debugFs string
 
 	// Capture configuration parameters from CLI flags
 	// TODO: Add flags for remote URL and switch between local and remote sources
-	flag.StringVar(&imageRoot, "imageRoot", "", "absolute path to image storage")
+	flag.StringVar(&imageSourceFlag, "imageSource", "", "one of: local, remote")
+	flag.StringVar(&rootPath, "rootPath", "", "base URL for remote source, or absolute path to local directory")
 	flag.IntVar(&poolSize, "poolSize", 5, "number of image buffers to allocate")
 	flag.Int64Var(&maxImageSize, "maxImageSize", 20*1024*1024, "maximum image size to accept for resize, in bytes")
+	flag.StringVar(&debugFs, "debugFs", "", "serve images at / from this directory (for debugging only)")
 	flag.Parse()
 
-	if imageRoot == "" {
-		fmt.Printf("No image root path provided, quitting.\n")
+	if imageSourceFlag == "" {
+		fmt.Printf("No image source specified (options: local, remote), quitting.\n")
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	dirFs := http.Dir(imageRoot)
-	thumbnailProcessor := NewThumbnailProcessor(encodeOptions, poolSize)
-	imageSource := LocalImageSource{
-		fs:      dirFs,
-		maxSize: maxImageSize,
+	if rootPath == "" {
+		fmt.Printf("No image root path/URL provided, quitting.\n")
+		flag.Usage()
+		os.Exit(1)
 	}
+
+	var imageSource ImageSource
+
+	if imageSourceFlag == "local" {
+		imageSource = LocalImageSource{
+			fs:      http.Dir(rootPath),
+			maxSize: maxImageSize,
+		}
+		fmt.Printf("Using local image source at %s\n", rootPath)
+	} else if imageSourceFlag == "remote" {
+		rootPath = strings.TrimRight(rootPath, "/")
+		// TODO: Make the allowed formats list configurable or at least more obvious
+		imageSource = NewRemoteImageSource(rootPath, maxImageSize, []string{"image/png", "image/jpg", "image/jpeg", "image/webp"}, poolSize)
+		fmt.Printf("Using remote image source at %s\n", rootPath)
+	} else {
+		fmt.Printf("Invalid image source specified (options: local, remote), quitting\n")
+		os.Exit(1)
+	}
+
+	thumbnailProcessor := NewThumbnailProcessor(encodeOptions, poolSize)
 
 	// See Example(DotFileHiding): https://golang.org/pkg/net/http/#FileServer
 	// See Disable directory listing with http.FileServer: https://groups.google.com/u/2/g/golang-nuts/c/bStLPdIVM6w
@@ -87,6 +109,13 @@ func main() {
 	thumbnailFs := thumbnailFileSystem{thumbnailProcessor, imageSource}
 
 	// See Example(StripPrefix): https://golang.org/pkg/net/http/#FileServer
+	// <https://stackoverflow.com/questions/27945310/why-do-i-need-to-use-http-stripprefix-to-access-my-static-files/27946132#27946132>
 	http.Handle("/thumb/", http.StripPrefix("/thumb/", http.FileServer(thumbnailFs)))
+
+	if debugFs != "" {
+		http.Handle("/", http.FileServer(http.Dir(debugFs)))
+		fmt.Printf("Serving images from %s at '/' (meant for debug only!)\n", debugFs)
+	}
+
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

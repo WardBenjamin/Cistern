@@ -1,1 +1,1 @@
-./cistern -imageRoot "$PWD/assets/" -poolSize 5
+./cistern -imageSource local -rootPath "$PWD/assets/" -poolSize 5
